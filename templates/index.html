@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="pl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sonariq Mastering Analyzer — Profesjonalna Analiza Audio</title>
+    <meta name="description"
+        content="Profesjonalny analizator audio: LUFS, True Peak, Spektrogram, Stereo, QC, AI Tips. Od www.sonariq.eu">
+    <link rel="icon" type="image/png" href="/static/img/logo.jpg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+
+<body>
+
+    <!-- ═══════ HEADER ═══════ -->
+    <header id="main-header">
+        <div class="header-left">
+            <img src="/static/img/logo.jpg" alt="Sonariq Logo" class="header-logo" id="header-logo">
+            <div class="header-text">
+                <h1>Mastering Analyzer <span
+                        style="font-size: 0.5em; font-weight: 400; color: #00ff88; vertical-align: middle; margin-left: 10px; padding: 2px 8px; border: 1px solid rgba(0,255,136,0.5); border-radius: 12px; text-transform: uppercase; letter-spacing: 1px; background: rgba(0,255,136,0.1);">Beta
+                        version 1.2</span></h1>
+                <p class="header-sub">Profesjonalna analiza audio — www.sonariq.eu</p>
+            </div>
+        </div>
+        <div class="header-right">
+            <button id="btn-export-pdf" class="btn btn-accent" disabled>
+                <span class="btn-icon">📄</span> PDF
+            </button>
+            <button id="btn-export-json" class="btn btn-secondary" disabled>
+                <span class="btn-icon">💾</span> JSON
+            </button>
+        </div>
+    </header>
+
+    <!-- ═══════ MODE SELECTOR ═══════ -->
+    <section id="mode-section">
+        <div class="mode-tabs">
+            <button class="mode-btn active" data-mode="single">🎵 Analiza pliku</button>
+            <button class="mode-btn" data-mode="compare">🔀 Porównanie A/B</button>
+            <button class="mode-btn" data-mode="batch">📦 Batch (album)</button>
+        </div>
+    </section>
+
+    <!-- ═══════ SINGLE UPLOAD ═══════ -->
+    <section id="upload-section">
+        <div id="drop-zone" class="drop-zone">
+            <div class="drop-zone-content">
+                <div class="drop-icon">🎵</div>
+                <h2>Przeciągnij plik audio tutaj</h2>
+                <p>lub kliknij, żeby wybrać</p>
+                <p class="drop-formats">WAV · MP3 · FLAC · OGG · AIFF (max 500 MB)</p>
+                <input type="file" id="file-input" accept=".wav,.mp3,.flac,.ogg,.aiff" hidden>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══════ A/B COMPARE UPLOAD ═══════ -->
+    <section id="compare-section" class="hidden">
+        <div class="compare-upload-grid">
+            <div class="drop-zone drop-zone-sm" id="drop-zone-a">
+                <div class="drop-zone-content">
+                    <div class="drop-icon">🅰️</div>
+                    <h3>Plik A (przed)</h3>
+                    <p class="drop-formats">Przeciągnij lub kliknij</p>
+                    <input type="file" id="file-input-a" accept=".wav,.mp3,.flac,.ogg,.aiff" hidden>
+                </div>
+            </div>
+            <div class="compare-vs">VS</div>
+            <div class="drop-zone drop-zone-sm" id="drop-zone-b">
+                <div class="drop-zone-content">
+                    <div class="drop-icon">🅱️</div>
+                    <h3>Plik B (po)</h3>
+                    <p class="drop-formats">Przeciągnij lub kliknij</p>
+                    <input type="file" id="file-input-b" accept=".wav,.mp3,.flac,.ogg,.aiff" hidden>
+                </div>
+            </div>
+        </div>
+        <button id="btn-compare" class="btn btn-accent btn-lg" disabled>🔀 Porównaj pliki</button>
+    </section>
+
+    <!-- ═══════ BATCH UPLOAD ═══════ -->
+    <section id="batch-section" class="hidden">
+        <div class="batch-description">
+            <h3>📦 Analiza albumu (Batch)</h3>
+            <p>Wgraj wszystkie utwory z albumu, żeby sprawdzić ich <strong>spójność głośności</strong> oraz zgodność z
+                normami streamingowymi. Analizator porówna LUFS, True Peak, dynamikę i tonację każdego utworu, a
+                następnie oceni czy album brzmi jednolicie — bez przesadnych różnic głośności między utworami.</p>
+            <div class="batch-features">
+                <span>📊 Porównanie LUFS</span>
+                <span>🎯 Zgodność ze streamingiem</span>
+                <span>⚖️ Spójność głośności</span>
+                <span>🔍 Kontrola jakości</span>
+            </div>
+        </div>
+        <div class="drop-zone" id="drop-zone-batch">
+            <div class="drop-zone-content">
+                <div class="drop-icon">📦</div>
+                <h2>Przeciągnij pliki albumu</h2>
+                <p>Wiele plików naraz (max 20)</p>
+                <input type="file" id="file-input-batch" accept=".wav,.mp3,.flac,.ogg,.aiff" multiple hidden>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══════ PROGRESS ═══════ -->
+    <section id="progress-section" class="hidden">
+        <div class="progress-container">
+            <div class="progress-info">
+                <span id="progress-filename" class="progress-filename"></span>
+                <span id="progress-percent" class="progress-percent">Analizowanie...</span>
+            </div>
+            <div class="progress-bar-track">
+                <div id="progress-bar" class="progress-bar-fill"></div>
+            </div>
+            <div id="progress-squares" class="progress-squares">
+                <div class="psq" id="psq-0" title="Dekodowanie audio"><span class="psq-label">1</span></div>
+                <div class="psq" id="psq-1" title="Przetwarzanie"><span class="psq-label">2</span></div>
+                <div class="psq" id="psq-2" title="LUFS"><span class="psq-label">3</span></div>
+                <div class="psq" id="psq-3" title="True Peak"><span class="psq-label">4</span></div>
+                <div class="psq" id="psq-4" title="Widmo"><span class="psq-label">5</span></div>
+                <div class="psq" id="psq-5" title="Stereo"><span class="psq-label">6</span></div>
+                <div class="psq" id="psq-6" title="Dynamika"><span class="psq-label">7</span></div>
+                <div class="psq" id="psq-7" title="Tonacja/Akordy"><span class="psq-label">8</span></div>
+                <div class="psq" id="psq-8" title="QC"><span class="psq-label">9</span></div>
+                <div class="psq" id="psq-9" title="AI Tips"><span class="psq-label">10</span></div>
+            </div>
+            <p id="progress-status" class="progress-status">Przetwarzanie pliku audio...</p>
+        </div>
+    </section>
+
+    <!-- ═══════ RESULTS ═══════ -->
+    <main id="results-section" class="hidden">
+
+        <!-- QC VERDICT BANNER -->
+        <section id="qc-banner" class="qc-banner">
+            <div class="qc-banner-top">
+                <div class="qc-verdict" id="qc-verdict-box">
+                    <span class="qc-verdict-icon" id="qc-verdict-icon">✅</span>
+                    <span class="qc-verdict-text" id="qc-verdict-text">Gotowy do dystrybucji</span>
+                </div>
+                <div class="qc-stats">
+                    <span class="qc-stat error" id="qc-errors">0 błędów</span>
+                    <span class="qc-stat warning" id="qc-warnings">0 ostrzeżeń</span>
+                    <span class="qc-stat info" id="qc-infos">0 info</span>
+                </div>
+            </div>
+            <div class="qc-banner-details" id="qc-banner-details"></div>
+        </section>
+
+        <!-- Summary Cards -->
+        <section id="summary-cards" class="summary-cards">
+            <div class="card summary-card" id="card-lufs-int">
+                <div class="card-label">Integrated LUFS</div>
+                <div class="card-value" id="val-lufs-int">—</div>
+                <div class="card-unit">LUFS</div>
+            </div>
+            <div class="card summary-card" id="card-true-peak">
+                <div class="card-label">True Peak</div>
+                <div class="card-value" id="val-true-peak">—</div>
+                <div class="card-unit">dBTP</div>
+            </div>
+            <div class="card summary-card" id="card-dr">
+                <div class="card-label">Dynamic Range</div>
+                <div class="card-value" id="val-dr">—</div>
+                <div class="card-unit">dB</div>
+            </div>
+            <div class="card summary-card" id="card-lra">
+                <div class="card-label">Loudness Range</div>
+                <div class="card-value" id="val-lra">—</div>
+                <div class="card-unit">LU</div>
+            </div>
+            <div class="card summary-card" id="card-key">
+                <div class="card-label">Tonacja</div>
+                <div class="card-value" id="val-key">—</div>
+                <div class="card-unit" id="val-key-conf"></div>
+            </div>
+            <div class="card summary-card" id="card-tempo">
+                <div class="card-label">Tempo</div>
+                <div class="card-value" id="val-tempo">—</div>
+                <div class="card-unit">BPM</div>
+            </div>
+            <div class="card summary-card" id="card-stereo">
+                <div class="card-label">Stereo Correlation</div>
+                <div class="card-value" id="val-stereo-corr">—</div>
+                <div class="card-unit" id="val-stereo-label"></div>
+            </div>
+            <div class="card summary-card" id="card-clip">
+                <div class="card-label">Clipping</div>
+                <div class="card-value" id="val-clip">—</div>
+                <div class="card-unit">pozycji</div>
+            </div>
+        </section>
+
+        <!-- Streaming Targets -->
+        <section class="card streaming-targets" id="streaming-section">
+            <h3 class="section-title">🎯 Zgodność z platformami streamingowymi</h3>
+            <div class="targets-grid" id="streaming-grid"></div>
+        </section>
+
+        <!-- TAB NAVIGATION -->
+        <nav id="tab-nav" class="tab-nav">
+            <button class="tab-btn active" data-tab="tab-lufs">📊 LUFS</button>
+            <button class="tab-btn" data-tab="tab-peak">📈 Peak</button>
+            <button class="tab-btn" data-tab="tab-waveform">🌊 Waveform</button>
+            <button class="tab-btn" data-tab="tab-spectrum">🌈 Widmo</button>
+            <button class="tab-btn" data-tab="tab-heatmap">🔥 Heatmap</button>
+            <button class="tab-btn" data-tab="tab-stereo">🔊 Stereo</button>
+            <button class="tab-btn" data-tab="tab-dynamics">⚡ Dynamika</button>
+            <button class="tab-btn" data-tab="tab-key">🎹 Tonacja</button>
+            <button class="tab-btn" data-tab="tab-chords">🎵 Tempo</button>
+            <button class="tab-btn" data-tab="tab-qc">🔍 QC</button>
+            <button class="tab-btn" data-tab="tab-ai">🤖 AI Tips</button>
+        </nav>
+
+        <!-- TAB: LUFS -->
+        <div id="tab-lufs" class="tab-panel active">
+            <div class="panel-grid">
+                <div class="card chart-card full-width">
+                    <h3 class="chart-title">Loudness w czasie (LUFS)</h3>
+                    <div class="chart-container"><canvas id="chart-lufs"></canvas></div>
+                </div>
+                <div class="card chart-card">
+                    <h3 class="chart-title">Histogram głośności (rozkład LUFS)</h3>
+                    <div class="chart-container chart-container-sm"><canvas id="chart-lufs-hist"></canvas></div>
+                </div>
+                <div class="card chart-card">
+                    <h3 class="chart-title">Crest Factor w czasie</h3>
+                    <div class="chart-container chart-container-sm"><canvas id="chart-crest"></canvas></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: True Peak -->
+        <div id="tab-peak" class="tab-panel">
+            <div class="panel-grid">
+                <div class="card chart-card full-width">
+                    <h3 class="chart-title">True Peak w czasie (dBTP)</h3>
+                    <div class="chart-container"><canvas id="chart-peak"></canvas></div>
+                </div>
+                <div class="card clip-list" id="clip-list-card">
+                    <h3 class="chart-title">⚠️ Pozycje clippingu</h3>
+                    <div id="clip-list" class="clip-list-content"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: Waveform -->
+        <div id="tab-waveform" class="tab-panel">
+            <div class="panel-grid">
+                <div class="card chart-card full-width">
+                    <h3 class="chart-title">Waveform overview</h3>
+                    <div class="chart-container"><canvas id="chart-waveform"></canvas></div>
+                </div>
+                <div class="card fade-info" id="fade-info">
+                    <h3 class="chart-title">🔉 Detekcja Fade In / Fade Out</h3>
+                    <div class="fade-grid" id="fade-grid"></div>
+                </div>
+                <div class="card lossy-info" id="lossy-info">
+                    <h3 class="chart-title">🔎 Detekcja kompresji stratnej</h3>
+                    <div id="lossy-result" class="lossy-result"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: Spectrum -->
+        <div id="tab-spectrum" class="tab-panel">
+            <div class="panel-grid">
+                <div class="card chart-card">
+                    <h3 class="chart-title">Średnie widmo częstotliwości</h3>
+                    <div class="chart-container"><canvas id="chart-avg-spectrum"></canvas></div>
+                </div>
+                <div class="card chart-card">
+                    <h3 class="chart-title">Balans widma — podział na pasma</h3>
+                    <div class="chart-container chart-container-sm"><canvas id="chart-band-balance"></canvas></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: Heatmap -->
+        <div id="tab-heatmap" class="tab-panel">
+            <div class="panel-grid">
+                <div class="card chart-card full-width">
+                    <h3 class="chart-title">Spektrogram — mapa ciepła</h3>
+                    <div class="heatmap-container"><canvas id="canvas-heatmap"></canvas></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: Stereo -->
+        <div id="tab-stereo" class="tab-panel">
+            <div class="panel-grid">
+                <div class="card chart-card">
+                    <h3 class="chart-title">Korelacja stereo L/R w czasie</h3>
+                    <div class="chart-container"><canvas id="chart-correlation"></canvas></div>
+                </div>
+                <div class="card chart-card">
+                    <h3 class="chart-title">Szerokość stereo w czasie</h3>
+                    <div class="chart-container"><canvas id="chart-width"></canvas></div>
+                </div>
+                <div class="card chart-card">
+                    <h3 class="chart-title">Balans Mid/Side</h3>
+                    <div class="chart-container chart-container-sm"><canvas id="chart-ms-balance"></canvas></div>
+                </div>
+                <div class="card chart-card">
+                    <h3 class="chart-title">Goniometr (faza stereo)</h3>
+                    <div class="chart-container chart-container-sm"><canvas id="canvas-goniometer"></canvas></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: Dynamics -->
+        <div id="tab-dynamics" class="tab-panel">
+            <div class="panel-grid">
+                <div class="card chart-card full-width">
+                    <h3 class="chart-title">RMS vs Peak Level w czasie</h3>
+                    <div class="chart-container"><canvas id="chart-dynamics"></canvas></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: Key -->
+        <div id="tab-key" class="tab-panel">
+            <div class="panel-grid">
+                <div class="card chart-card">
+                    <h3 class="chart-title">Wykryta tonacja</h3>
+                    <div class="key-display">
+                        <div class="key-note" id="key-display-note">—</div>
+                        <div class="key-mode" id="key-display-mode">—</div>
+                        <div class="key-confidence" id="key-display-conf">—</div>
+                    </div>
+                </div>
+                <div class="card chart-card">
+                    <h3 class="chart-title">Rozkład Chroma (profil tonalny)</h3>
+                    <div class="chart-container chart-container-sm"><canvas id="chart-chroma"></canvas></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: Tempo -->
+        <div id="tab-chords" class="tab-panel">
+            <div class="panel-grid">
+                <div class="card chart-card full-width">
+                    <h3 class="chart-title">🎵 Tempo w czasie</h3>
+                    <div class="chart-container"><canvas id="chart-tempo"></canvas></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: QC -->
+        <div id="tab-qc" class="tab-panel">
+            <div class="panel-grid">
+                <div class="card full-width" id="qc-issues-card">
+                    <h3 class="chart-title">🔍 Raport kontroli jakości (Auto-QC)</h3>
+                    <div id="qc-issues-list" class="qc-issues-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: AI Tips -->
+        <div id="tab-ai" class="tab-panel">
+            <div class="panel-grid">
+                <div class="card full-width" id="ai-tips-card">
+                    <h3 class="chart-title">🤖 Rekomendacje AI Mastering</h3>
+                    <div id="ai-tips-list" class="ai-tips-list"></div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- ═══════ COMPARE RESULTS ═══════ -->
+    <main id="compare-results" class="hidden">
+        <section class="card full-width">
+            <h3 class="section-title">🔀 Porównanie A/B</h3>
+            <div class="compare-table-wrap">
+                <table id="compare-table" class="compare-table">
+                    <thead>
+                        <tr>
+                            <th>Parametr</th>
+                            <th id="compare-name-a">Plik A</th>
+                            <th id="compare-name-b">Plik B</th>
+                            <th>Różnica</th>
+                        </tr>
+                    </thead>
+                    <tbody id="compare-tbody"></tbody>
+                </table>
+            </div>
+        </section>
+        <section class="card full-width">
+            <h3 class="section-title">📊 Porównanie widma</h3>
+            <div class="chart-container"><canvas id="chart-compare-spectrum"></canvas></div>
+        </section>
+    </main>
+
+    <!-- ═══════ BATCH RESULTS ═══════ -->
+    <main id="batch-results" class="hidden">
+        <section class="card full-width">
+            <h3 class="section-title">📦 Analiza albumu</h3>
+            <div class="compare-table-wrap">
+                <table id="batch-table" class="compare-table">
+                    <thead>
+                        <tr>
+                            <th>Plik</th>
+                            <th>LUFS</th>
+                            <th>True Peak</th>
+                            <th>DR</th>
+                            <th>LRA</th>
+                            <th>Tonacja</th>
+                            <th>BPM</th>
+                            <th>Czas</th>
+                            <th>Głośność</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="batch-tbody"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <!-- ═══════ FEEDBACK FORM ═══════ -->
+    <section id="feedback-section"
+        style="max-width: 800px; margin: 60px auto 40px; padding: 35px 40px; background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(0, 255, 136, 0.2); border-radius: 12px; text-align: left;">
+        <h2 style="color: #00ff88; margin-bottom: 10px; font-size: 1.8rem; text-align: center;">Ankieta Testów Wersji
+            Beta 1.2</h2>
+        <p style="color: #ccc; margin-bottom: 40px; font-size: 1rem; line-height: 1.6; text-align: center;">
+            Twój głos ma dla nas ogromne znaczenie! Wypełnij poniższą, krótką ankietę <nobr>(10 pytań)</nobr> i pomóż
+            nam stworzyć idealne narzędzie dopasowane pod workflow nowoczesnego inżyniera dźwięku.
+        </p>
+
+        <form id="feedback-form" onsubmit="submitFeedbackForm(event)"
+            style="display: flex; flex-direction: column; gap: 28px;">
+
+            <input type="hidden" name="_subject" value="Ankieta - Sonariq Mastering Analyzer Beta 1.2">
+            <input type="hidden" name="_captcha" value="false">
+
+            <!-- Pytanie 1 -->
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 10px;">
+                <label style="color: #fff; font-weight: 600; font-size: 1.05rem;">1. Jak ogólnie oceniasz narzędzie w
+                    skali od 1 do 10?</label>
+                <select name="q1_rating" required
+                    style="padding: 12px; background: rgba(0,0,0,0.6); border: 1px solid #444; border-radius: 8px; color: #fff; font-family: 'Inter', sans-serif; cursor: pointer;">
+                    <option value="" disabled selected>Wybierz punkt z zakresu (1 = Tragedia, 10 = Ogień!)</option>
+                    <option value="1">1 - Bardzo słabo</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5 - Przeciętnie, ale ma potencjał</option>
+                    <option value="6">6</option>
+                    <option value="7">7</option>
+                    <option value="8">8 - Bardzo dobrze</option>
+                    <option value="9">9</option>
+                    <option value="10">10 - Absolutna rewelacja</option>
+                </select>
+            </div>
+
+            <!-- Pytanie 2 -->
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 10px;">
+                <label style="color: #fff; font-weight: 600; font-size: 1.05rem;">2. Jaki jest Twój główny cel używania
+                    tego typu analizatora?</label>
+                <select name="q2_purpose" required
+                    style="padding: 12px; background: rgba(0,0,0,0.6); border: 1px solid #444; border-radius: 8px; color: #fff; font-family: 'Inter', sans-serif; cursor: pointer;">
+                    <option value="" disabled selected>Wybierz jeden scenariusz wykorzystania</option>
+                    <option value="mastering">Mastering (ściskanie w limit i docelowa optymalizacja)</option>
+                    <option value="mixing">Miksowanie (balans częstotliwości i mono-compatibility)</option>
+                    <option value="qc">Kontrola Jakości przed zgraniem albumu lub dystrybucją</option>
+                    <option value="reference">Szybkie porównywanie mojego mixu z referencją (A/B)</option>
+                    <option value="other">Inne</option>
+                </select>
+            </div>
+
+            <!-- Pytanie 3 -->
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 10px;">
+                <label style="color: #fff; font-weight: 600; font-size: 1.05rem;">3. Jak oceniasz przejrzystość i
+                    nowoczesność szaty graficznej?</label>
+                <div style="display: flex; gap: 20px; flex-wrap: wrap; color: #ccc; margin-top: 5px;">
+                    <label style="cursor: pointer; display: flex; align-items: center; gap: 6px;"><input type="radio"
+                            name="q3_ui" value="5" required> Rewelacyjnie</label>
+                    <label style="cursor: pointer; display: flex; align-items: center; gap: 6px;"><input type="radio"
+                            name="q3_ui" value="4"> Ładnie</label>
+                    <label style="cursor: pointer; display: flex; align-items: center; gap: 6px;"><input type="radio"
+                            name="q3_ui" value="3"> Przeciętnie</label>
+                    <label style="cursor: pointer; display: flex; align-items: center; gap: 6px;"><input type="radio"
+                            name="q3_ui" value="2"> Słabo</label>
+                    <label style="cursor: pointer; display: flex; align-items: center; gap: 6px;"><input type="radio"
+                            name="q3_ui" value="1"> Bardzo przestarzała</label>
+                </div>
+            </div>
+
+            <!-- Pytanie 4 -->
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 10px;">
+                <label style="color: #fff; font-weight: 600; font-size: 1.05rem;">4. Która funkcja analizatora
+                    (zakładka) jest najbardziej przełomowa?</label>
+                <select name="q4_feature" required
+                    style="padding: 12px; background: rgba(0,0,0,0.6); border: 1px solid #444; border-radius: 8px; color: #fff; font-family: 'Inter', sans-serif; cursor: pointer;">
+                    <option value="" disabled selected>Zaznacz dla nas priorytet na przyszłość</option>
+                    <option value="lufs">Wykresy LUFS w czasie i profil LRA</option>
+                    <option value="peak">Pomiar True Peak i wykrywanie miejsc clippingu</option>
+                    <option value="spectrum">Zestawienie równowagi tonalnej z Heatmapą</option>
+                    <option value="stereo">Analiza fazy Stereo / Goniometr (Mid-Side)</option>
+                    <option value="dynamics">Pomiar Dynamiki DR (RMS vs Peak) i Crest Factor</option>
+                    <option value="batch">Analiza pełnych albumów (spójność Batch)</option>
+                    <option value="ai_qc">Autorskie wnioski QC / Rekomendacje słowne (AI Tips)</option>
+                </select>
+            </div>
+
+            <!-- Pytanie 5 -->
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 10px;">
+                <label style="color: #fff; font-weight: 600; font-size: 1.05rem;">5. Czy analizator potrzebuje dużo
+                    czasu na wylistowanie i wyrysowanie rezultatów?</label>
+                <div style="display: flex; flex-direction: column; gap: 10px; color: #ccc; margin-top: 5px;">
+                    <label style="cursor: pointer; display: flex; align-items: flex-start; gap: 8px;"><input
+                            type="radio" name="q5_speed" value="fast" required style="margin-top: 4px;"> Działa
+                        fenomenalnie i błyskawicznie — tego mi trzeba!</label>
+                    <label style="cursor: pointer; display: flex; align-items: flex-start; gap: 8px;"><input
+                            type="radio" name="q5_speed" value="ok" style="margin-top: 4px;"> Czas przetworzenia jest w
+                        pełni akceptowalny, nie denerwuje.</label>
+                    <label style="cursor: pointer; display: flex; align-items: flex-start; gap: 8px;"><input
+                            type="radio" name="q5_speed" value="slow" style="margin-top: 4px;"> Przycięcia animacji lub
+                        silnika zbytnio spowalniają i zniechęcają.</label>
+                </div>
+            </div>
+
+            <!-- Pytanie 6 -->
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 10px;">
+                <label style="color: #fff; font-weight: 600; font-size: 1.05rem;">6. Pomyśl o docelowej platformie
+                    dystrybucji, z której najczęściej korzystasz:</label>
+                <select name="q6_platform" required
+                    style="padding: 12px; background: rgba(0,0,0,0.6); border: 1px solid #444; border-radius: 8px; color: #fff; font-family: 'Inter', sans-serif; cursor: pointer;">
+                    <option value="" disabled selected>Co to za platforma?</option>
+                    <option value="spotify">Serwisy Streamingowe ze standardem LUFS (np. Spotify / Apple)</option>
+                    <option value="youtube">Serwisy Video (np. YouTube)</option>
+                    <option value="cd">Medium fizyczne i dystrybucja radiowa (Płyta CD, Radio)</option>
+                    <option value="club">Klubowe sklepy dla DJ-ów (np. Beatport z naciskiem na cyfrowe zera)</option>
+                    <option value="other">Inne (np. Soundcloud)</option>
+                </select>
+            </div>
+
+            <!-- Pytanie 7 -->
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 10px;">
+                <label style="color: #fff; font-weight: 600; font-size: 1.05rem;">7. Oceń system sztucznej inteligencji
+                    pod powłoką 'AI Tips' i kontrolę 'QC':</label>
+                <div style="display: flex; flex-direction: column; gap: 10px; color: #ccc; margin-top: 5px;">
+                    <label style="cursor: pointer; display: flex; align-items: flex-start; gap: 8px;"><input
+                            type="radio" name="q7_ai" value="great" required style="margin-top: 4px;"> Rekomendacje
+                        uratowałyby mój miks, wnioski z AI są bezbłędne.</label>
+                    <label style="cursor: pointer; display: flex; align-items: flex-start; gap: 8px;"><input
+                            type="radio" name="q7_ai" value="good" style="margin-top: 4px;"> Ciekawe diagnozy, jednak
+                        nie ufam im bez weryfikacji manualnej po wykresie.</label>
+                    <label style="cursor: pointer; display: flex; align-items: flex-start; gap: 8px;"><input
+                            type="radio" name="q7_ai" value="bad" style="margin-top: 4px;"> AI twierdzi, że mój utwór
+                        jest zły z błahych powodów, jest zagubiona.</label>
+                    <label style="cursor: pointer; display: flex; align-items: flex-start; gap: 8px;"><input
+                            type="radio" name="q7_ai" value="none" style="margin-top: 4px;"> Patrzę wyłącznie na twarde
+                        wskaźniki RMS/Peak, teksty są zbędne.</label>
+                </div>
+            </div>
+
+            <!-- Pytanie 8 -->
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 10px;">
+                <label style="color: #fff; font-weight: 600; font-size: 1.05rem;">8. Od kogo moglibyśmy się uczyć? Podaj
+                    nazwę wtyczek/urządzeń (analizatorów) z którymi do tej pory pracowałeś i byłeś zadomowiony:</label>
+                <input type="text" name="q8_competitor"
+                    placeholder="Np. iZotope Insight, Voxengo SPAN, TC Electronic Clarity..."
+                    style="padding: 12px; background: rgba(0,0,0,0.6); border: 1px solid #444; border-radius: 8px; color: #fff; font-family: 'Inter', sans-serif;">
+            </div>
+
+            <!-- Pytanie 9 -->
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 10px;">
+                <label style="color: #fff; font-weight: 600; font-size: 1.05rem;">9. Czy polecił(a)byś ten analizator
+                    koledze lub inżynierowi muzycznemu w obecnym stanie?</label>
+                <select name="q9_nps" required
+                    style="padding: 12px; background: rgba(0,0,0,0.6); border: 1px solid #444; border-radius: 8px; color: #fff; font-family: 'Inter', sans-serif; cursor: pointer;">
+                    <option value="" disabled selected>Zaznacz opcję z poniższych</option>
+                    <option value="definitely">Zdecydowanie TAK — od dziś będzie to moje główne rozwiązanie</option>
+                    <option value="probably">Raczej tak</option>
+                    <option value="neutral">Muszę mu się przyjrzeć po paru aktualizacjach (Neutralnie)</option>
+                    <option value="unlikely">Brak w nim dla mnie niezbędnych funkcji do codziennej pracy</option>
+                    <option value="never">Absolutnie nie — są na rynku dojrzałe darmowe narzędzia VST</option>
+                </select>
+            </div>
+
+            <!-- Pytanie 10 -->
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 10px;">
+                <label style="color: #fff; font-weight: 600; font-size: 1.05rem;">10. Miejsce tylko na Twoją wyobraźnię!
+                    Podziel się każdym innym pomysłem – co wyrzucić, a co dorobić graficznie i merytorycznie?</label>
+                <textarea name="q10_feedback" rows="4"
+                    placeholder="Wyrzućcie goniometr, ale dajcie mi funkcję pobierania raportu XML! Cokolwiek chodzi Ci po głowie... (Krótko lub opowiadanie)"
+                    required
+                    style="width: 100%; padding: 15px; background: rgba(0,0,0,0.6); border: 1px solid #444; border-radius: 8px; color: #fff; font-family: 'Inter', sans-serif; resize: vertical; min-height: 120px;"></textarea>
+            </div>
+
+            <div style="text-align: center; margin-top: 25px;">
+                <button type="submit" class="btn btn-accent"
+                    style="padding: 16px 60px; font-weight: 700; font-size: 1.15rem; cursor: pointer; border-radius: 30px; box-shadow: 0 0 15px rgba(0,255,136,0.3); transition: all 0.3s ease;">🚀
+                    Wyślij Opinie Testową</button>
+            </div>
+        </form>
+    </section>
+
+    <script>
+        function submitFeedbackForm(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+            const submitBtn = form.querySelector('button[type="submit"]');
+            const originalText = submitBtn.innerHTML;
+
+            submitBtn.innerHTML = '🕒 Wysyłanie...';
+            submitBtn.disabled = true;
+
+            fetch("https://formsubmit.co/ajax/sonariq.biuro@gmail.com", {
+                method: "POST",
+                body: formData,
+                headers: {
+                    'Accept': 'application/json'
+                }
+            })
+                .then(response => response.json())
+                .then(data => {
+                    alert('Dziękujemy za opinię! Została wysłana z powodzeniem na adres email.');
+                    form.reset();
+                    submitBtn.innerHTML = originalText;
+                    submitBtn.disabled = false;
+                })
+                .catch(error => {
+                    alert('Wystąpił błąd podczas wysyłania. Spróbuj ponownie później.');
+                    submitBtn.innerHTML = originalText;
+                    submitBtn.disabled = false;
+                });
+        }
+    </script>
+
+    <!-- ═══════ FOOTER ═══════ -->
+    <footer id="main-footer">
+        <p>&copy; 2026 <a href="https://www.sonariq.eu" target="_blank">www.sonariq.eu</a> — Mastering Audio Analyzer
+        </p>
+    </footer>
+
+    <script src="/static/js/app.js"></script>
+</body>
+
+</html>
