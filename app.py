@@ -148,14 +148,20 @@ def compute_true_peak(y, sr):
     from scipy.signal import resample_poly
     chs=[y] if y.ndim==1 else [y[0],y[1]]
     tpdb=[]; clips=[]; pot=[]; pt=[]
+    chunk_size=8192; thr=10**(-0.1/20.0)
     for ci,ch in enumerate(chs):
-        yu=resample_poly(ch,up=4,down=1)
-        tp=float(np.max(np.abs(yu))); td=20*np.log10(tp+1e-12); tpdb.append(round(td,2))
-        thr=10**(-0.1/20.0); blk=2048
-        for s in range(0,len(ch)-blk,blk):
-            seg=ch[s:s+blk]; su=resample_poly(seg,up=4,down=1); pv=float(np.max(np.abs(su)))
+        # Process in chunks to avoid 4x full-length upsample (saves ~200MB RAM)
+        max_tp=0.0
+        for s in range(0,len(ch),chunk_size):
+            seg=ch[s:s+chunk_size]
+            su=resample_poly(seg,up=4,down=1)
+            pv=float(np.max(np.abs(su)))
+            if pv>max_tp: max_tp=pv
             if pv>=thr:
                 clips.append({'time':round(float(s/sr),3),'channel':ci,'peak_db':round(20*np.log10(pv+1e-12),2)})
+            del su
+        td=20*np.log10(max_tp+1e-12); tpdb.append(round(td,2))
+        # Peak over time (no upsampling needed — lightweight)
         w=int(0.05*sr); h=int(0.02*sr)
         for s in range(0,len(ch)-w,h):
             seg=ch[s:s+w]; pv=float(np.max(np.abs(seg)))
@@ -467,40 +473,43 @@ def run_full_analysis(filepath, original_filename):
     print(f"[ANALYSIS] File size: {os.path.getsize(filepath) / 1024 / 1024:.1f} MB")
     
     try:
-        y_stereo,sr=librosa.load(filepath,sr=44100,mono=False)
+        y_stereo,sr=librosa.load(filepath,sr=22050,mono=False)
     except Exception as e:
         raise RuntimeError(f"Nie udało się zdekodować pliku audio. Sprawdź, czy ffmpeg jest zainstalowany. Błąd: {e}")
     
-    # Derive mono from stereo (avoid loading file twice — saves ~50% RAM)
-    y_mono = np.mean(y_stereo, axis=0) if y_stereo.ndim > 1 else y_stereo
-    duration=round(float(len(y_mono)/sr),2)
+    duration=round(float(y_stereo.shape[-1]/sr),2)
     print(f"[ANALYSIS] Loaded: {duration}s, sr={sr}, shape={y_stereo.shape}")
     
     r={'filename':original_filename,'duration':duration,'sampleRate':sr,
        'channels':1 if y_stereo.ndim==1 else y_stereo.shape[0]}
+    
+    # Stereo-dependent analyses first
     r['lufs']=compute_lufs(y_stereo,sr)
-    print("[ANALYSIS] LUFS done")
+    print("[ANALYSIS] LUFS done"); gc.collect()
     r['truePeak']=compute_true_peak(y_stereo,sr)
-    print("[ANALYSIS] True Peak done")
-    r['spectrum']=compute_spectrum(y_stereo,sr)
-    print("[ANALYSIS] Spectrum done")
+    print("[ANALYSIS] True Peak done"); gc.collect()
     r['stereo']=compute_stereo(y_stereo,sr)
-    print("[ANALYSIS] Stereo done")
+    print("[ANALYSIS] Stereo done"); gc.collect()
+    
+    # Remaining analyses work on mono — free stereo data early
+    r['spectrum']=compute_spectrum(y_stereo,sr)
+    print("[ANALYSIS] Spectrum done"); gc.collect()
     r['dynamics']=compute_dynamics(y_stereo,sr)
-    print("[ANALYSIS] Dynamics done")
+    print("[ANALYSIS] Dynamics done"); gc.collect()
     r['key']=compute_key(y_stereo,sr)
-    print("[ANALYSIS] Key done")
+    print("[ANALYSIS] Key done"); gc.collect()
     r['tempoChords']=compute_tempo_and_chords(y_stereo,sr)
-    print("[ANALYSIS] Tempo done")
+    print("[ANALYSIS] Tempo done"); gc.collect()
     r['crest']=compute_crest_factor(y_stereo,sr)
     r['lossy']=detect_lossy_origin(y_stereo,sr)
     r['waveform']=compute_waveform(y_stereo,sr)
     r['fade']=compute_fade_detection(y_stereo,sr)
+    gc.collect()
     r['qc']=compute_auto_qc(y_stereo,sr,r)
     r['aiTips']=generate_ai_suggestions(r)
     
     # Cleanup memory
-    del y_mono, y_stereo
+    del y_stereo
     gc.collect()
     print(f"[ANALYSIS] Complete: {original_filename}")
     
