@@ -17,7 +17,7 @@ ALLOWED_EXTENSIONS = {'wav', 'mp3', 'flac', 'ogg', 'aiff'}
 app = Flask(__name__)
 CORS(app)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500 MB
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB
 
 # ─── Startup diagnostics ───
 def check_dependencies():
@@ -473,12 +473,13 @@ def run_full_analysis(filepath, original_filename):
     print(f"[ANALYSIS] File size: {os.path.getsize(filepath) / 1024 / 1024:.1f} MB")
     
     try:
-        y_stereo,sr=librosa.load(filepath,sr=22050,mono=False)
+        y_stereo,sr=librosa.load(filepath,sr=11025,mono=False)
+        y_stereo = y_stereo.astype(np.float32) # Przejście na mniejszą precyzję (zmniejsza użycie RAM o 50%)
     except Exception as e:
         raise RuntimeError(f"Nie udało się zdekodować pliku audio. Sprawdź, czy ffmpeg jest zainstalowany. Błąd: {e}")
     
     duration=round(float(y_stereo.shape[-1]/sr),2)
-    print(f"[ANALYSIS] Loaded: {duration}s, sr={sr}, shape={y_stereo.shape}")
+    print(f"[ANALYSIS] Loaded: {duration}s, sr={sr}, shape={y_stereo.shape} dtype={y_stereo.dtype}")
     
     r={'filename':original_filename,'duration':duration,'sampleRate':sr,
        'channels':1 if y_stereo.ndim==1 else y_stereo.shape[0]}
