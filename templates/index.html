@@ -28,7 +28,7 @@
             <div class="header-text">
                 <h1>Mastering Analyzer <span
                         style="font-size: 0.5em; font-weight: 400; color: #00ff88; vertical-align: middle; margin-left: 10px; padding: 2px 8px; border: 1px solid rgba(0,255,136,0.5); border-radius: 12px; text-transform: uppercase; letter-spacing: 1px; background: rgba(0,255,136,0.1);">Beta
-                        version 1.2</span></h1>
+                        version 1.4</span></h1>
                 <p class="header-sub">Profesjonalna analiza audio — www.sonariq.eu</p>
             </div>
         </div>
@@ -372,6 +372,54 @@
                 <div class="card full-width" id="ai-tips-card">
                     <h3 class="chart-title">🤖 Rekomendacje AI Mastering</h3>
                     <div id="ai-tips-list" class="ai-tips-list"></div>
+                </div>
+
+                <div class="card full-width" id="spotify-sim-card">
+                    <h3 class="chart-title">🎧 Symulator Platform Streamingowych</h3>
+                    <p style="color:#94a3b8; font-size: 0.9rem; margin-bottom: 15px;">Tak Twoja piosenka będzie brzmieć
+                        na Spotify lub YouTube po normalizacji (do -14 LUFS). Suwak pokazuje o ile algorytm obniży lub
+                        podniesie głośność Twojego nagrania.</p>
+                    <div
+                        style="display: flex; gap: 15px; align-items: center; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px;">
+                        <button id="btn-sim-play" class="btn btn-secondary" style="min-width: 140px;">▶️
+                            Odtwórz</button>
+                        <div style="flex: 1;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                                <label style="font-size: 0.85rem; color: #cbd5e1;">Korekcja głośności (Gain):</label>
+                                <span id="sim-gain-label"
+                                    style="font-size: 0.85rem; font-weight: 700; color: #4ade80;">0.0 dB</span>
+                            </div>
+                            <input type="range" id="sim-gain-slider" min="-18" max="18" step="0.1" value="0" disabled
+                                style="width: 100%; cursor: pointer;">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card full-width" id="checklist-card">
+                    <h3 class="chart-title">✅ Lista kontrolna przed dystrybucją</h3>
+                    <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 15px;">
+                        <label
+                            style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; color: #e2e8f0;">
+                            <input type="checkbox" style="width: 20px; height: 20px; margin-top: 2px;">
+                            <span>Czy zgrałeś(aś) plik w bezstratnym formacie WAV (np. 24-bit / 44.1 kHz)?</span>
+                        </label>
+                        <label
+                            style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; color: #e2e8f0;">
+                            <input type="checkbox" style="width: 20px; height: 20px; margin-top: 2px;">
+                            <span>Czy usunąłeś(aś) cyfrową ciszę na początku i końcu nagrania (Fade In/Out)?</span>
+                        </label>
+                        <label
+                            style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; color: #e2e8f0;">
+                            <input type="checkbox" style="width: 20px; height: 20px; margin-top: 2px;">
+                            <span>Czy zabezpieczyłeś(aś) zapas True Peak (sugerowane -1.0 dBTP)?</span>
+                        </label>
+                        <label
+                            style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; color: #e2e8f0;">
+                            <input type="checkbox" style="width: 20px; height: 20px; margin-top: 2px;">
+                            <span>Czy upewniłeś(aś) się, że miks jest kompatybilny z mono (nie ma problemów z
+                                fazą)?</span>
+                        </label>
+                    </div>
                 </div>
             </div>
         </div>

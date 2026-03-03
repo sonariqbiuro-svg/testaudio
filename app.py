@@ -312,49 +312,49 @@ def compute_auto_qc(y, sr, results):
     # DC offset (>-90 dBFS trigger)
     dc=float(np.mean(ym))
     if abs(dc)>0.0000316:
-        issues.append({'type':'warning','cat':'DC Offset','msg':f'DC Offset ({20*np.log10(abs(dc)+1e-12):.1f} dBFS) odbiera asymetryczny headroom. Zastosuj filtr HPF (1-5 Hz) na sumie.','sev':'medium'})
+        issues.append({'type':'warning','cat':'DC Offset','msg':f'DC Offset ({20*np.log10(abs(dc)+1e-12):.1f} dBFS) odbiera asymetryczny headroom. <span style="color:#22d3ee; font-size: 0.8rem; display: block; margin-top: 5px;"><strong>💡 Rada:</strong> Zastosuj filtr HPF (1-5 Hz) na sumie (Master Bus).</span>','sev':'medium'})
     # Clipping (Intersample Peaks)
     if results['truePeak']['clipCount']>500:
-        issues.append({'type':'error','cat':'Clipping (Hard)','msg':f'Wykryto drastyczny hard clipping ({results["truePeak"]["clipCount"]} ISP). Utrata informacji ciągłej, rekomendowana interwencja pre-master oznaczająca redukcję gainu przed limiterem (declipping).','sev':'high'})
+        issues.append({'type':'error','cat':'Clipping (Hard)','msg':f'Wykryto drastyczny hard clipping ({results["truePeak"]["clipCount"]} ISP). Utrata informacji ciągłej. <span style="color:#22d3ee; font-size: 0.8rem; display: block; margin-top: 5px;"><strong>💡 Rada:</strong> Wykonaj redukcję gainu przed limiterem (declipping). Zmniejsz wzmocnienie na śladach.</span>','sev':'high'})
     elif results['truePeak']['clipCount']>0:
-        issues.append({'type':'warning','cat':'Clipping (Soft ISP)','msg':f'Wykryto {results["truePeak"]["clipCount"]} intersample peaks. Zalecane obniżenie sufitu (ceiling) limitera.','sev':'medium'})
+        issues.append({'type':'warning','cat':'Clipping (Soft ISP)','msg':f'Wykryto {results["truePeak"]["clipCount"]} intersample peaks (ISP). Sygnał przesterowuje po rekonstrukcji analogowej. <span style="color:#22d3ee; font-size: 0.8rem; display: block; margin-top: 5px;"><strong>💡 Rada:</strong> Obniż sufit (ceiling) w limiterze o ułamek decybela.</span>','sev':'medium'})
     # True Peak & PLR
     lufs = results['lufs']['integrated']
     tp=results['truePeak']['maxTruePeak']
     plr = tp - lufs
     if plr < 8:
-        issues.append({'type':'warning','cat':'PLR (Dynamika M/M)','msg':f'Bardzo niski wskaźnik Peak to Loudness Ratio (PLR: {plr:.1f} dB). Miks nosi silne ślady wciskania w limit zjawisk Loudness War, gubiąc naturalny punch.','sev':'medium'})
+        issues.append({'type':'warning','cat':'PLR (Dynamika M/M)','msg':f'Bardzo niski wskaźnik Peak to Loudness Ratio (PLR: {plr:.1f} dB). Miks nosi silne ślady wciskania w limit zjawisk Loudness War, gubiąc naturalny punch. <span style="color:#22d3ee; font-size: 0.8rem; display: block; margin-top: 5px;"><strong>💡 Rada:</strong> Zmniejsz Threshold (próg) limitera, by odzyskać przestrzeń.</span>','sev':'medium'})
     
     if tp>0.1:
-        issues.append({'type':'error','cat':'True Peak','msg':f'True Peak ({tp} dBTP) przekracza sprzętowe zero cyfrowe (clipping). Koniecznie opuść ceiling.','sev':'high'})
+        issues.append({'type':'error','cat':'True Peak','msg':f'True Peak ({tp} dBTP) przekracza sprzętowe zero cyfrowe (clipping d/a). <span style="color:#22d3ee; font-size: 0.8rem; display: block; margin-top: 5px;"><strong>💡 Rada:</strong> Koniecznie opuść ceiling (sufit) na swoim limiterze poniżej 0.0 dBTP.</span>','sev':'high'})
     elif tp>-1.0:
-        issues.append({'type':'warning','cat':'True Peak','msg':f'True Peak ({tp} dBTP) przekracza zalecane dla streamingu -1 dBTP (ale jest bezpieczny dla CD).','sev':'medium'})
+        issues.append({'type':'warning','cat':'True Peak','msg':f'True Peak ({tp} dBTP) przekracza standard rynkowy -1.0 dBTP. Bezpieczny tylko dla fizycznych CD. <span style="color:#22d3ee; font-size: 0.8rem; display: block; margin-top: 5px;"><strong>💡 Rada:</strong> Jeśli chcesz wysłać numer na Spotify, przycisz ceiling w limiterze przynajmniej do -1.0.</span>','sev':'medium'})
     # Phase
     if not results['stereo']['isMono']:
         ac=results['stereo']['avgCorrelation']
         if ac<0:
-            issues.append({'type':'error','cat':'Faza','msg':f'Problemy fazowe! Korelacja: {ac}','sev':'high'})
+            issues.append({'type':'error','cat':'Faza','msg':f'Problemy fazowe! Skrajna anty-faza. Przedziały lewego kanału zwalczają prawy (Korelacja: {ac}). <span style="color:#22d3ee; font-size: 0.8rem; display: block; margin-top: 5px;"><strong>💡 Rada:</strong> Pozbądź się agresywnych efektów wtyczek poszerzających stereo / Haas Effect na swoich Leadach. Odsłuchaj miks w MONO.</span>','sev':'high'})
         elif ac<0.3:
-            issues.append({'type':'warning','cat':'Faza','msg':f'Bardzo szerokie stereo, ryzyko mono compatibility. Korelacja: {ac}','sev':'medium'})
+            issues.append({'type':'warning','cat':'Faza','msg':f'Bardzo szerokie ujęcie stereo, wysokie ryzyko zaniku na mono urządzeniach. <span style="color:#22d3ee; font-size: 0.8rem; display: block; margin-top: 5px;"><strong>💡 Rada:</strong> Sprawdź zgodność z mono. Czasami na mono telefonie mogą zniknąć głusi, lub gitary.</span>','sev':'medium'})
     # Sub-bass
     sub=results['spectrum']['bandBalance'].get('Sub (<60 Hz)',0)
     if sub>15:
-        issues.append({'type':'warning','cat':'Sub-Bass','msg':f'Nadmiar energii sub-bass: {sub}%','sev':'medium'})
+        issues.append({'type':'warning','cat':'Sub-Bass','msg':f'Masywny, potężny nadmiar głośności w najniższych częstotliwościach: {sub}%. <span style="color:#22d3ee; font-size: 0.8rem; display: block; margin-top: 5px;"><strong>💡 Rada:</strong> Nałóż precyzyjny filtr górnoprzepustowy (HPF) na swoim sub-basie. Kompresory zadziałają czyściej!</span>','sev':'medium'})
     # Dynamic range
     dr=results['dynamics']['drMeter']
     if dr<5:
-        issues.append({'type':'warning','cat':'Dynamika','msg':f'Niska dynamika: {dr} dB — może brzmieć przekompresowane','sev':'medium'})
+        issues.append({'type':'warning','cat':'Dynamika','msg':f'Brak dynamiki, mocno "zblokowany" utwór (DR: {dr} dB). <span style="color:#22d3ee; font-size: 0.8rem; display: block; margin-top: 5px;"><strong>💡 Rada:</strong> Opuść agresję kompresora na szynie z bębnami lub na sumie.</span>','sev':'medium'})
     # LRA
     lra=results['lufs']['lra']
     if lra<3:
-        issues.append({'type':'warning','cat':'Loudness Range','msg':f'Bardzo niska loudness range: {lra} LU','sev':'low'})
+        issues.append({'type':'warning','cat':'Loudness Range','msg':f'Bardzo mała wariacja głośności nagrania muzycznego (LRA: {lra} LU). <span style="color:#22d3ee; font-size: 0.8rem; display: block; margin-top: 5px;"><strong>💡 Rada:</strong> Makro-dynamika jest płaska. Jeśli to audio spoken-word (podcast) to super! Jednak w muzyce postaraj się zautomatyzować zwrotki, by były cichsze od refrenów.</span>','sev':'low'})
     # Silence
     sil_t=0.001; sil_s=int(2*sr)
     if len(ym)>sil_s:
         if np.sqrt(np.mean(ym[:sil_s]**2))<sil_t:
-            issues.append({'type':'info','cat':'Cisza','msg':'Ponad 2s ciszy na początku','sev':'low'})
+            issues.append({'type':'info','cat':'Cisza','msg':'Ponad 2s cyfrowej ciszy i przerwy na poczatku pliku. <span style="color:#22d3ee; font-size: 0.8rem; display: block; margin-top: 5px;"><strong>💡 Rada:</strong> Obetnij początek w projektowym DAW przed pójściem do streamingu.</span>','sev':'low'})
         if np.sqrt(np.mean(ym[-sil_s:]**2))<sil_t:
-            issues.append({'type':'info','cat':'Cisza','msg':'Ponad 2s ciszy na końcu','sev':'low'})
+            issues.append({'type':'info','cat':'Cisza','msg':'Niepotrzebny "ogon" ciszy ciągnący sie pod koniec nagrania po Fade-Out. <span style="color:#22d3ee; font-size: 0.8rem; display: block; margin-top: 5px;"><strong>💡 Rada:</strong> Zrób rendering z dokładnym zaznaczeniem miejsca, w którym kończy sie wybrzmienie Reverb/Delay.</span>','sev':'low'})
     # Lossy
     lossy=results.get('lossy',{})
     if lossy.get('isLossy'):
@@ -377,58 +377,30 @@ def generate_ai_suggestions(results):
     dr=results['dynamics']['drMeter']
     cf=results.get('crest', {}).get('crestFactorDb', 0)
     
-    # LUFS & Normalization
-    if lufs>-11:
-        att = abs(lufs - (-14))
-        tips.append({'icon':'📉','title':'Agresywne ujemne wzmocnienie (Attenuation)','msg':f'Utwór ma głośność {lufs} LUFS. Platformy streamingowe ukarzą go ujemnym wzmocnieniem ok. -{att:.1f} dB (np. Spotify Normalization). Master będzie brzmiał punktowo "płaściej" od cichszej, bardziej dynamicznej konkurencji.'})
-    elif lufs>-13:
-        att = abs(lufs - (-14))
-        tips.append({'icon':'📊','title':'Wysoka głośność','msg':f'LUFS ({lufs}) jest nieznacznie powyżej standardu EBU R128/streamingowego (-14 LUFS). Spodziewaj się ściszenia przez algorytmy o ok. {att:.1f} dB.'})
-    elif lufs<-16:
-        boost = abs((-14) - lufs)
-        tips.append({'icon':'📈','title':'Niska głośność','msg':f'LUFS ({lufs}) jest poniżej większości targetów. Utwór zostanie zgłośniony ok. +{boost:.1f} dB, co może podnieść poziom szumu (noise floor) i wprowadzić interwencję wbudowanych limiterów platform streamingowych.'})
-    
-    # True Peak (uwzględnienie głośności do stratnego kodowania MP3/AAC)
-    if lufs > -9 and tp > -2.0:
-        tips.append({'icon':'📉','title':'Ryzyko Clippingu przy konwersji (MP3/AAC)','msg':f'Ponieważ Twój master jest bardzo głośny ({lufs} LUFS), True Peak równy {tp} dBTP to za mało marginesu. Gęste kodery wprowadzają fluktuacje nawet do +2 dBTP. Obniż ceiling (sufit) limitera do max -2.0 dBTP.'})
-    elif tp>-1.0:
-        tips.append({'icon':'📈','title':'True Peak powyżej bezpiecznej normy stramingowych','msg':f'Wartość True Peak ({tp} dBTP) przekracza uniwersalne bezpieczeństwo -1.0 dBTP zalecane przy standardowych dystrybucjach. Systemy D/A bez dużego HEADROOMu mogą tutaj charczeć.'})
-        
-    # Standard CD Audio (Red Book)
-    if tp > 0.0:
-        tips.append({'icon':'💿','title':'Brak zgodności z nośnikiem CD Audio','msg':f'Dla fizycznego standardu płyt CD (Red Book 16-bit), poziom True Peak nie może sprzętowo przekraczać zera (0.0 dBTP), a zaleca się absolutny sufit -0.3 dBTP. Przy {tp} dBTP tłocznia wygeneruje twarde trzaski na tańszych odtwarzaczach cyfrowych CD.'})
+    # 1. Głośność (LUFS)
+    if lufs < -16:
+        tips.append({'icon':'📉','title':'Zbyt cicho','msg':'Twoje nagranie jest znacznie cichsze niż standardy streamingowe. Spotify/YouTube podgłośni je sztucznie, co może wprowadzić niechciany limiter. Spróbuj użyć kompresora lub limitera na sumie.'})
+    elif lufs > -9:
+        tips.append({'icon':'📈','title':'Zbyt głośno','msg':f'Nagranie jest bardzo głośne ({lufs} LUFS - tzw. "Loudness War"). Platformy streamingowe je przyciszą. Stracisz na dynamice, a zyskasz niewiele. Rozważ obniżenie głośności.'})
+    elif lufs > -13:
+        tips.append({'icon':'📊','title':'Głośniej niż standard (-14 LUFS)','msg':f'Twoja głośność to {lufs} LUFS. Platformy nieznacznie przyciszą Twój utwór do -14 LUFS. W nowoczesnej muzyce użytkowej (Pop/EDM) jest to jednak bardzo częste zjawisko i dla wielu jest to "Sweet Spot".'})
     else:
-        tips.append({'icon':'💿','title':'Gotowość dla płyt CD Audio','msg':f'Ze zmierzonym szczytem {tp} dBTP utwór technicznie mieści się w limitach sprzętowych D/A dla fizycznego standardu zapisu CD Audio bez ryzyka drastycznego hard clippingu elektroniki z lat 80. i 90.'})
+        tips.append({'icon':'✅','title':'Głośność optymalna','msg':'Świetna robota! Twoje audio oscyluje idealnie wokół standardu głośności większości serwisów streamingowych (-14 LUFS).'})
 
-    # Crest Factor i Dynamika (Punch)
-    if cf > 0:
-        if cf < 6.0:
-            tips.append({'icon':'🥊','title':'Nadmierna kompresja transjentów','msg':f'Crest Factor to jedyne {cf} dB. Różnica między transjentami (atak instrumentów) a średnim body sygnału jest znikoma. Miks może dusić i męczyć słuchacza ciągłą ścianą dźwięku.'})
-        elif cf > 8 and cf < 12:
-            tips.append({'icon':'🥊','title':'Świetny Crest Factor (Punch)','msg':f'Crest Factor ({cf} dB) oscyluje we wzorowym paśmie popowo-rockowym (8-12). Utwór zachował mocne, naturalne transjenty z odpowiednią gęstością tła.'})
-        elif cf > 14:
-            tips.append({'icon':'⚖️','title':'Ekstremalnie wysoka dynamika (Crest)','msg':f'Bardzo szczytowy charakter sygnału ({cf} dB CF). Zastanów się nad łagodną kompresją sumy na najostrzejszych pikach.'})
+    # 2. True Peak (Szczyty sygnału)
+    if tp > -1.0:
+        tips.append({'icon':'⚠️','title':'Zagrożenie True Peak (Klipowanie)','msg':f'Uwaga! Twój True Peak wynosi {tp} dBTP. Serwisy streamingowe zalecają rygorystyczne -1.0 dBTP. Po konwersji do formatu MP3/AAC mogą pojawić się słyszalne zniekształcenia. Warto obniżyć "Ceiling" na limiterze.'})
+    elif tp < -6.0:
+        tips.append({'icon':'💡','title':'Duży zapas (Headroom)','msg':'Masz duży zapas (-headroom), ale marnujesz potencjał głośności. Możesz bezpiecznie wzmocnić sygnał.'})
+    else:
+        tips.append({'icon':'✅','title':'True Peak zachowany','msg':'Bezpieczny zapas szczytów True Peak. Plik przetrwa obróbkę do formatów stratnych.'})
 
-    # Phase / Mono
-    if not results['stereo']['isMono']:
-        ac=results['stereo']['avgCorrelation']
-        if ac<0.3:
-            tips.append({'icon':'🔊','title':'Brak spójności fazowej','msg':f'Średnia korelacja ({ac}) skazuje na to, że wiele pasm w Left/Right gra zupełnie co innego lub w kontr-fazie. Sprawdź odsłuch w czystym MONO - istnieje ryzyko zaniku fundamentu układu rytmicznego.'})
-    
-    # Spectral Tips
-    sub=results['spectrum']['bandBalance'].get('Sub (<60 Hz)',0)
-    if sub>15:
-        tips.append({'icon':'🎚️','title':'Nadmierny sub-bas','msg':f'Zbyt dużo subsonicznej energii ({sub}% przed pasmem). Pożera to ogromnie dużo headroomu we wtyczkach procesujących (zwłaszcza w kompresorze). Zalecam HPF.'})
-    
-    hi=results['spectrum']['bandBalance'].get('High (6-20k Hz)',0)
-    if hi<0.1:
-        tips.append({'icon':'🎚️','title':'Mało górnego pasma (ciemny LTAS)','msg':f'Energia high to zaledwie {hi}%. Może odpowiadać to za stłumiony, bardzo ciemny / "pudełkowy" odcień. Przydadzą się filtry high-shelf na wokalu lub talerzach.'})
-    elif hi>4:
-        tips.append({'icon':'🎚️','title':'Przejaskrawione wysokie (LTAS)','msg':f'Przesyt góry ({hi}% w proporcji liniowej). W klasycznym rozkładzie (nachylenie spektralne -5dB/okt), to zwiastuje że utwór będzie boleśnie brzmieć na głośnych zestawach Hi-Fi i słuchawkach.'})
-    
-    if not tips:
-        tips.append({'icon':'✅','title':'Mistrzowski balans!','msg':'Świetny LTAS (równowaga tonalna), bezpieczny Crest Factor, dobra gęstość i przemyślany headroom. Nic nie trzeba poprawiać przed wrzuceniem na algorytmy platform dystrybucyjnych.'})
-    
+    # 3. Stereofonia i Faza
+    if results['stereo']['isMono']:
+        tips.append({'icon':'📻','title':'Sygnał Mono','msg':'Twoje nagranie jest całkowicie mono. Jeśli to podcast – to dobrze. Jeśli to muzyka – rozważ poszerzenie panoramy dla lepszego efektu.'})
+    elif results['stereo']['avgCorrelation'] < 0:
+        tips.append({'icon':'🔊','title':'Problemy z fazą','msg':'Uwaga: Wykryto problemy z fazą. Po odtworzeniu na telefonie (w mono) niektóre instrumenty mogą zniknąć. Sprawdź efekty stereo na ścieżkach.'})
+        
     return tips
 
 # ═══════════════════════════════════════════════════════════

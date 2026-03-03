@@ -3,6 +3,7 @@
  */
 let analysisData = null;
 let batchAnalysisData = null;
+let currentAnalysisFile = null;
 let activeMode = 'single';
 const charts = {};
 Chart.defaults.color = '#94a3b8';
@@ -67,6 +68,7 @@ fileInput.addEventListener('change', e => { if (e.target.files.length) handleFil
 function handleFile(file) {
     const exts = ['.wav', '.mp3', '.flac', '.ogg', '.aiff'];
     if (!exts.includes('.' + file.name.split('.').pop().toLowerCase())) { alert('Nieobsługiwany format'); return; }
+    currentAnalysisFile = file;
     startAnalysis(file);
 }
 
@@ -449,6 +451,85 @@ function renderResults(d) {
     renderTempoChart(d.tempoChords);
     renderQCIssues(d.qc);
     renderAITips(d.aiTips);
+    if (typeof initSimulator === 'function') initSimulator(d.lufs.integrated);
+}
+
+// ═══════ SIMULATOR LOGIC ═══════
+const btnSimPlay = document.getElementById('btn-sim-play');
+const simGainSlider = document.getElementById('sim-gain-slider');
+const simGainLabel = document.getElementById('sim-gain-label');
+let simAudioCtx = null;
+let simAudioElem = null;
+let simGainNode = null;
+let isPlaying = false;
+
+function initSimulator(lufs) {
+    if (!btnSimPlay || !simGainSlider) return;
+
+    if (simAudioElem) {
+        simAudioElem.pause();
+        simAudioElem.src = '';
+    }
+    isPlaying = false;
+    btnSimPlay.textContent = '▶️ Odtwórz';
+
+    // Normalizacja względem targetu Spotify -14 LUFS
+    const targetGain = -14 - lufs;
+    simGainSlider.value = targetGain;
+    simGainSlider.disabled = false;
+    simGainLabel.textContent = targetGain > 0 ? `+${targetGain.toFixed(1)} dB` : `${targetGain.toFixed(1)} dB`;
+
+    if (!simAudioElem) {
+        simAudioElem = new Audio();
+        simAudioElem.addEventListener('ended', () => {
+            isPlaying = false;
+            btnSimPlay.textContent = '▶️ Odtwórz';
+        });
+
+        btnSimPlay.addEventListener('click', () => {
+            if (!currentAnalysisFile) return;
+
+            if (isPlaying) {
+                simAudioElem.pause();
+                isPlaying = false;
+                btnSimPlay.textContent = '▶️ Odtwórz';
+            } else {
+                if (!simAudioElem.src) {
+                    simAudioElem.src = URL.createObjectURL(currentAnalysisFile);
+
+                    if (!simAudioCtx) {
+                        try {
+                            simAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                            const track = simAudioCtx.createMediaElementSource(simAudioElem);
+                            simGainNode = simAudioCtx.createGain();
+                            track.connect(simGainNode).connect(simAudioCtx.destination);
+                        } catch (e) { console.error("Web Audio API error:", e); }
+                    }
+                }
+
+                if (simGainNode) {
+                    const db = parseFloat(simGainSlider.value);
+                    simGainNode.gain.value = Math.pow(10, db / 20);
+                }
+
+                if (simAudioCtx && simAudioCtx.state === 'suspended') {
+                    simAudioCtx.resume();
+                }
+
+                simAudioElem.play();
+                isPlaying = true;
+                btnSimPlay.textContent = '⏸️ Wstrzymaj';
+            }
+        });
+
+        simGainSlider.addEventListener('input', (e) => {
+            const db = parseFloat(e.target.value);
+            simGainLabel.textContent = db > 0 ? `+${db.toFixed(1)} dB` : `${db.toFixed(1)} dB`;
+            if (simGainNode) {
+                simGainNode.gain.value = Math.pow(10, db / 20);
+            }
+        });
+    }
 }
 
 // ═══════ QC BANNER ═══════
@@ -462,18 +543,35 @@ function renderQCBanner(qc) {
     // Show issue details in banner
     const details = document.getElementById('qc-banner-details');
     if (qc.issues.length > 0) {
+        details.style.display = 'flex';
         details.innerHTML = qc.issues.map(i => {
             const icon = i.type === 'error' ? '❌' : i.type === 'warning' ? '⚠️' : 'ℹ️';
-            return `<span class="qc-banner-item ${i.type}">${icon} ${i.cat}: ${i.msg}</span>`;
+            // Custom styling for block display
+            let bg = i.type === 'error' ? 'rgba(239, 68, 68, 0.08)' : i.type === 'warning' ? 'rgba(245, 158, 11, 0.08)' : 'rgba(148, 163, 184, 0.08)';
+            let border = i.type === 'error' ? 'rgba(239, 68, 68, 0.3)' : i.type === 'warning' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(148, 163, 184, 0.3)';
+
+            return `<div class="qc-banner-item" style="display: block; width: 100%; border-radius: 6px; background: ${bg}; border: 1px solid ${border}; padding: 10px 14px; font-size: 0.85rem; line-height: 1.6;"><strong>${icon} ${i.cat}:</strong> ${i.msg}</div>`;
         }).join('');
-    } else { details.innerHTML = ''; }
+    } else {
+        details.innerHTML = '';
+        details.style.display = 'none';
+    }
 }
 
 // ═══════ QC ISSUES ═══════
 function renderQCIssues(qc) {
     const el = document.getElementById('qc-issues-list');
     if (!qc.issues.length) { el.innerHTML = '<div class="qc-issue pass"><span class="qc-issue-icon">✅</span><div><strong>Brak problemów</strong><p>Plik przeszedł wszystkie testy kontroli jakości.</p></div></div>'; return; }
-    el.innerHTML = qc.issues.map(i => `<div class="qc-issue ${i.type}"><span class="qc-issue-icon">${i.type === 'error' ? '❌' : i.type === 'warning' ? '⚠️' : 'ℹ️'}</span><div><strong>${i.cat}</strong><p>${i.msg}</p></div></div>`).join('');
+    el.innerHTML = qc.issues.map(i => {
+        const icon = i.type === 'error' ? '❌' : i.type === 'warning' ? '⚠️' : 'ℹ️';
+        return `<div class="qc-issue ${i.type}" style="display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 8px;">
+            <span class="qc-issue-icon" style="font-size: 1.2rem; flex-shrink: 0; margin-top: -2px;">${icon}</span>
+            <div style="flex: 1;">
+                <strong style="color: var(--text-primary); display: block; margin-bottom: 4px;">${i.cat}</strong>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin: 0; line-height: 1.5;">${i.msg}</p>
+            </div>
+        </div>`;
+    }).join('');
 }
 
 // ═══════ AI TIPS ═══════
@@ -501,6 +599,17 @@ function renderStreamingTargets(data) {
             if (lufsDiff > 1) { reasons.push(`${lufs > t.lufs ? 'za głośno' : 'za cicho'} o ${lufsDiff.toFixed(1)} LUFS`); }
             if (!tpOk) reasons.push(`True Peak ${tp} przekracza ${t.tp} dBTP`);
             reason = reasons.join(' + ');
+
+            // Prosta i zrozumiała porada co z tym zrobić
+            let advice = [];
+            if (lufs > t.lufs + 1) advice.push(`Ścisz sumę o ${lufsDiff.toFixed(1)} dB`);
+            else if (lufs < t.lufs - 1) advice.push(`Podgłośnij sumę o ${lufsDiff.toFixed(1)} dB`);
+
+            if (!tpOk) advice.push(`ustaw Ceiling (sufit) w limiterze na ${t.tp.toFixed(1)} dBTP`);
+
+            if (advice.length > 0) {
+                reason += `<span style="color:var(--cyan); font-size: 0.75rem; display: block; margin-top: 5px;"><strong>💡 Rada:</strong> ${advice.join(' i ')}.</span>`;
+            }
         }
         const reasonHtml = reason ? `<div class="target-reason">${reason}</div>` : '';
         return `<div class="target-item ${sc}"><span class="target-icon">${t.icon}</span><div class="target-info"><div class="target-name">${t.name}</div><div class="target-detail">Target: ${t.lufs} LUFS / ${t.tp} dBTP</div>${reasonHtml}</div><span class="target-status ${sc}">${status}</span></div>`;
@@ -995,10 +1104,20 @@ btnExportPdf.addEventListener('click', async () => {
         const ph = pdf.internal.pageSize.getHeight();
         const m = 15, cw = pw - 2 * m;
 
-        // Helper: strip emoji (Helvetica can't render them)
+        // Helper: Polish chars to ASCII (Helvetica nie ma polskich glifow)
+        function pl(str) {
+            if (!str) return '';
+            const map = { '\u0105': 'a', '\u0107': 'c', '\u0119': 'e', '\u0142': 'l', '\u0144': 'n', '\u00f3': 'o', '\u015b': 's', '\u017a': 'z', '\u017c': 'z', '\u0104': 'A', '\u0106': 'C', '\u0118': 'E', '\u0141': 'L', '\u0143': 'N', '\u00d3': 'O', '\u015a': 'S', '\u0179': 'Z', '\u017b': 'Z' };
+            return str.replace(/[\u0105\u0107\u0119\u0142\u0144\u00f3\u015b\u017a\u017c\u0104\u0106\u0118\u0141\u0143\u00d3\u015a\u0179\u017b]/g, c => map[c] || c);
+        }
+
+        // Helper: strip emoji + HTML tags + polish transliteration
         function clean(str) {
             if (!str) return '';
-            return String(str).replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27BF}]|[\u{FE00}-\u{FEFF}]|[\u{1F900}-\u{1F9FF}]|[\u{200D}]|[\u{20E3}]|[\u{E0020}-\u{E007F}]|[\u2705\u274C\u26A0\u2139\u2B50\u2728\u26A1\u2714\u2717]/gu, '').trim();
+            let s = String(str);
+            s = s.replace(/<[^>]*>/g, '');
+            s = s.replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27BF}]|[\u{FE00}-\u{FEFF}]|[\u{1F900}-\u{1F9FF}]|[\u{200D}]|[\u{20E3}]|[\u{E0020}-\u{E007F}]|[\u2705\u274C\u26A0\u2139\u2B50\u2728\u26A1\u2714\u2717]/gu, '').trim();
+            return pl(s);
         }
 
         // Helper: check page overflow
@@ -1010,19 +1129,30 @@ btnExportPdf.addEventListener('click', async () => {
             }
         }
 
-        // ═══ HEADER ═══
+        // Helper: print wrapped text
+        function printWrapped(text, x, maxW, lineH) {
+            const lines = pdf.splitTextToSize(text, maxW);
+            lines.forEach(line => {
+                checkPage(lineH + 1);
+                pdf.text(line, x, y);
+                y += lineH;
+            });
+        }
+
+        // === HEADER ===
         pdf.setFillColor(10, 10, 18);
         pdf.rect(0, 0, pw, 42, 'F');
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(20);
-        pdf.setTextColor(34, 197, 94); // Logo color
+        pdf.setTextColor(34, 197, 94);
         pdf.text('Sonariq Mastering Analyzer', m, 18);
         pdf.setFontSize(10);
-        pdf.setTextColor(50, 50, 50);
+        pdf.setTextColor(148, 163, 184);
         pdf.text('Raport analizy audio - www.sonariq.eu', m, 26);
         pdf.setFontSize(8);
 
         if (activeMode === 'batch') {
+            pdf.setTextColor(148, 163, 184);
             pdf.text('Tryb: Analiza Albumu (Batch)', m, 34);
             pdf.text('Zbadano utworow: ' + dataContext.tracks.length, m, 39);
             pdf.text('Data: ' + new Date().toLocaleString('pl-PL'), pw - m - 55, 34);
@@ -1032,7 +1162,7 @@ btnExportPdf.addEventListener('click', async () => {
             pdf.setFontSize(14);
             pdf.setFont('helvetica', 'bold');
             pdf.setTextColor(10, 10, 10);
-            pdf.text('Sprawozdanie ze spojnosci albumu', m, y);
+            pdf.text(clean('Sprawozdanie ze spojnosci albumu'), m, y);
             y += 8;
 
             pdf.setFontSize(9);
@@ -1044,40 +1174,37 @@ btnExportPdf.addEventListener('click', async () => {
                 pdf.setTextColor(10, 10, 10);
                 pdf.text((i + 1) + '. ' + clean(t.filename), m + 2, y + 4);
                 y += 10;
-
                 pdf.setFont('helvetica', 'normal');
                 pdf.setTextColor(40, 40, 40);
                 pdf.text('LUFS: ' + t.lufs + ' | True Peak: ' + t.truePeak + ' | DR: ' + t.dr + ' | LRA: ' + t.lra, m + 2, y);
                 y += 5;
-
                 if (t.loudnessMsg) {
                     if (t.loudnessStatus === 'ok') pdf.setTextColor(20, 150, 50);
                     else pdf.setTextColor(200, 100, 0);
-                    pdf.text('Glosnosc: ' + clean(t.loudnessMsg), m + 2, y);
+                    pdf.text(clean('Glosnosc: ' + t.loudnessMsg), m + 2, y);
                     y += 5;
                 }
-
                 if (t.issues && t.issues.length) {
                     t.issues.forEach(iss => {
                         checkPage(8);
                         if (iss.type === 'error') pdf.setTextColor(200, 40, 40);
                         else if (iss.type === 'warning') pdf.setTextColor(200, 100, 0);
                         else pdf.setTextColor(50, 50, 50);
-                        pdf.text('  - [' + clean(iss.type).toUpperCase() + '] ' + clean(iss.cat) + ': ' + clean(iss.msg), m + 2, y);
-                        y += 5;
+                        pdf.setFontSize(8);
+                        printWrapped('  - [' + clean(iss.type).toUpperCase() + '] ' + clean(iss.cat) + ': ' + clean(iss.msg), m + 2, cw - 5, 3.5);
                     });
                 }
-
                 y += 4;
             });
 
         } else {
+            pdf.setTextColor(148, 163, 184);
             pdf.text('Plik: ' + clean(dataContext.filename), m, 34);
             pdf.text('Data: ' + new Date().toLocaleString('pl-PL'), pw - m - 55, 34);
-            pdf.text('Czas trwania: ' + formatTime(dataContext.duration), pw - m - 55, 39);
+            pdf.text(clean('Czas trwania: ') + formatTime(dataContext.duration), pw - m - 55, 39);
             y = 48;
 
-            // ═══ SUMMARY BOX ═══
+            // === SUMMARY BOX ===
             checkPage(45);
             pdf.setFillColor(245, 245, 245);
             pdf.roundedRect(m, y, cw, 42, 3, 3, 'F');
@@ -1101,7 +1228,7 @@ btnExportPdf.addEventListener('click', async () => {
             });
             y += 48;
 
-            // ═══ QC VERDICT ═══
+            // === QC VERDICT ===
             checkPage(15);
             const verdict = clean(analysisData.qc.verdictText);
             pdf.setFontSize(11);
@@ -1112,34 +1239,36 @@ btnExportPdf.addEventListener('click', async () => {
             pdf.text('Status QC: ' + verdict, m, y + 5);
             y += 12;
 
-            // ═══ QC ISSUES ═══
+            // === QC ISSUES ===
             if (analysisData.qc.issues.length) {
                 pdf.setFontSize(10);
                 pdf.setFont('helvetica', 'bold');
                 pdf.setTextColor(10, 10, 10);
-                pdf.text('Problemy kontroli jakosci', m, y);
+                pdf.text(clean('Problemy kontroli jakosci'), m, y);
                 y += 6;
-
                 pdf.setFontSize(8);
-                pdf.setFont('helvetica', 'normal');
                 analysisData.qc.issues.forEach(iss => {
-                    checkPage(6);
+                    checkPage(14);
                     const prefix = iss.type === 'error' ? '[BLAD]' : iss.type === 'warning' ? '[OSTRZEZENIE]' : '[INFO]';
                     if (iss.type === 'error') pdf.setTextColor(200, 40, 40);
                     else if (iss.type === 'warning') pdf.setTextColor(200, 100, 0);
                     else pdf.setTextColor(50, 50, 50);
-                    pdf.text('  ' + prefix + ' ' + clean(iss.cat) + ': ' + clean(iss.msg), m + 3, y);
-                    y += 5;
+                    pdf.setFont('helvetica', 'bold');
+                    pdf.text('  ' + prefix + ' ' + clean(iss.cat), m + 3, y);
+                    y += 4;
+                    pdf.setFont('helvetica', 'normal');
+                    printWrapped('    ' + clean(iss.msg), m + 3, cw - 10, 3.5);
+                    y += 2;
                 });
                 y += 4;
             }
 
-            // ═══ STREAMING TARGETS ═══
+            // === STREAMING TARGETS ===
             checkPage(25);
             pdf.setFontSize(10);
             pdf.setFont('helvetica', 'bold');
             pdf.setTextColor(10, 10, 10);
-            pdf.text('Zgodnosc z platformami streamingowymi', m, y);
+            pdf.text(clean('Zgodnosc z platformami streamingowymi'), m, y);
             y += 6;
 
             const lufsVal = analysisData.lufs.integrated;
@@ -1149,6 +1278,8 @@ btnExportPdf.addEventListener('click', async () => {
                 { name: 'Apple Music', lufs: -16, tp: -1 },
                 { name: 'YouTube', lufs: -14, tp: -1 },
                 { name: 'Tidal', lufs: -14, tp: -1 },
+                { name: 'Amazon Music', lufs: -14, tp: -2 },
+                { name: 'Deezer', lufs: -15, tp: -1 },
             ];
 
             pdf.setFontSize(8);
@@ -1160,61 +1291,53 @@ btnExportPdf.addEventListener('click', async () => {
                 let status;
                 if (diff <= 1 && tpOk) { pdf.setTextColor(20, 150, 50); status = 'OK'; }
                 else if (diff <= 3 && tpOk) { pdf.setTextColor(200, 100, 0); status = 'Blisko (roznica: ' + diff.toFixed(1) + ' LUFS)'; }
-                else { pdf.setTextColor(200, 40, 40); status = 'NIE (roznica: ' + diff.toFixed(1) + ' LUFS)'; }
-                pdf.text('  ' + p.name + ' (target: ' + p.lufs + ' LUFS): ' + status, m + 3, y);
+                else {
+                    pdf.setTextColor(200, 40, 40);
+                    let reasons = [];
+                    if (diff > 1) reasons.push((lufsVal > p.lufs ? 'za glosno' : 'za cicho') + ' o ' + diff.toFixed(1) + ' LUFS');
+                    if (!tpOk) reasons.push('True Peak ' + tpVal + ' przekracza ' + p.tp + ' dBTP');
+                    status = 'NIE (' + reasons.join(' + ') + ')';
+                }
+                pdf.text('  ' + p.name + ' (target: ' + p.lufs + ' LUFS / ' + p.tp + ' dBTP): ' + status, m + 3, y);
                 y += 5;
             });
             y += 4;
 
-            // ═══ AI TIPS ═══
+            // === AI TIPS (REKOMENDACJE) ===
             if (analysisData.aiTips && analysisData.aiTips.length) {
                 checkPage(15);
-                pdf.setFontSize(10);
+                pdf.setFontSize(12);
                 pdf.setFont('helvetica', 'bold');
-                pdf.setTextColor(10, 10, 10);
-                pdf.text('Rekomendacje', m, y);
-                y += 6;
-
-                pdf.setFontSize(8);
-                pdf.setFont('helvetica', 'normal');
+                pdf.setTextColor(34, 197, 94);
+                pdf.text('Rekomendacje AI Mastering', m, y);
+                y += 7;
                 analysisData.aiTips.forEach(tip => {
-                    checkPage(10);
-                    const title = clean(tip.title);
-                    const msg = clean(tip.msg);
+                    checkPage(16);
+                    pdf.setFontSize(9);
                     pdf.setFont('helvetica', 'bold');
                     pdf.setTextColor(10, 10, 10);
-                    pdf.text('  ' + title, m + 3, y);
+                    pdf.text('  ' + clean(tip.title), m + 3, y);
                     y += 4;
                     pdf.setFont('helvetica', 'normal');
-                    pdf.setTextColor(30, 30, 30);
-                    const lines = pdf.splitTextToSize('  ' + msg, cw - 10);
-                    lines.forEach(line => {
-                        checkPage(4);
-                        pdf.text(line, m + 3, y);
-                        y += 4;
-                    });
-                    y += 2;
+                    pdf.setTextColor(50, 50, 50);
+                    pdf.setFontSize(8);
+                    printWrapped('    ' + clean(tip.msg), m + 3, cw - 10, 3.5);
+                    y += 3;
                 });
+                y += 4;
             }
 
-            // ═══ CHARTS (WYKRESY) ═══
-            const chartKeys = [
+            // === KEY CHARTS ===
+            const priorityCharts = [
                 { id: 'lufs', title: 'LUFS w czasie' },
-                { id: 'lufsHist', title: 'Histogram głośności' },
-                { id: 'crest', title: 'Crest Factor' },
                 { id: 'peak', title: 'True Peak w czasie' },
                 { id: 'waveform', title: 'Waveform' },
-                { id: 'avgSpectrum', title: 'Średnie widmo' },
+                { id: 'avgSpectrum', title: 'Srednie widmo' },
                 { id: 'bandBalance', title: 'Pasma widma' },
-                { id: 'correlation', title: 'Korelacja Stereo L/R' },
-                { id: 'width', title: 'Szerokość Stereo' },
-                { id: 'msBalance', title: 'Balans Mid/Side' },
                 { id: 'dynamics', title: 'Dynamika RMS vs Peak' },
-                { id: 'chroma', title: 'Profil tonalny' },
-                { id: 'tempo', title: 'Tempo w czasie' }
             ];
 
-            for (let c of chartKeys) {
+            for (let c of priorityCharts) {
                 if (charts[c.id]) {
                     checkPage(95);
                     pdf.setFontSize(10);
@@ -1224,7 +1347,36 @@ btnExportPdf.addEventListener('click', async () => {
                     y += 5;
                     try {
                         const img = charts[c.id].toBase64Image();
-                        pdf.setFillColor(24, 24, 40); // Dark background for contrast since UI charts use white text
+                        pdf.setFillColor(24, 24, 40);
+                        pdf.roundedRect(m, y, cw, 80, 2, 2, 'F');
+                        pdf.addImage(img, 'PNG', m + 5, y + 5, cw - 10, 70);
+                        y += 85;
+                    } catch (e) { }
+                }
+            }
+
+            // === REMAINING CHARTS ===
+            const extraCharts = [
+                { id: 'lufsHist', title: 'Histogram glosnosci' },
+                { id: 'crest', title: 'Crest Factor' },
+                { id: 'correlation', title: 'Korelacja Stereo L/R' },
+                { id: 'width', title: 'Szerokosc Stereo' },
+                { id: 'msBalance', title: 'Balans Mid/Side' },
+                { id: 'chroma', title: 'Profil tonalny' },
+                { id: 'tempo', title: 'Tempo w czasie' }
+            ];
+
+            for (let c of extraCharts) {
+                if (charts[c.id]) {
+                    checkPage(95);
+                    pdf.setFontSize(10);
+                    pdf.setFont('helvetica', 'bold');
+                    pdf.setTextColor(10, 10, 10);
+                    pdf.text('Wykres: ' + clean(c.title), m, y);
+                    y += 5;
+                    try {
+                        const img = charts[c.id].toBase64Image();
+                        pdf.setFillColor(24, 24, 40);
                         pdf.roundedRect(m, y, cw, 80, 2, 2, 'F');
                         pdf.addImage(img, 'PNG', m + 5, y + 5, cw - 10, 70);
                         y += 85;
@@ -1258,7 +1410,7 @@ btnExportPdf.addEventListener('click', async () => {
 
         } // <-- End of Active Mode Branching (Batch vs Single)
 
-        // ═══ FOOTER on all pages ═══
+        // === FOOTER on all pages ===
         const totalPages = pdf.internal.getNumberOfPages();
         for (let i = 1; i <= totalPages; i++) {
             pdf.setPage(i);
@@ -1276,3 +1428,4 @@ btnExportPdf.addEventListener('click', async () => {
         btnExportPdf.disabled = false;
     }
 });
+

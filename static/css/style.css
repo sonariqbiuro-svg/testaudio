@@ -611,7 +611,7 @@ body::before {
 
 .targets-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    grid-template-columns: repeat(2, 1fr);
     gap: var(--space-md);
 }
 
@@ -1440,13 +1440,28 @@ body::before {
 
 .qc-banner {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
+    flex-direction: column;
+    align-items: stretch;
     padding: var(--space-md) var(--space-lg);
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     margin-bottom: var(--space-xl);
+}
+
+.qc-banner-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.qc-banner-details {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 16px;
+    width: 100%;
 }
 
 .qc-verdict {
