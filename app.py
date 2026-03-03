@@ -2,11 +2,12 @@
 Sonariq Mastering Audio Analyzer — Flask Backend
 Full analysis: LUFS, True Peak, Spectrum, Stereo, Dynamics, Key, QC, Crest, Waveform, Fade, Lossy, AI
 """
-import os, sys, json, math, traceback, tempfile, gc
+import os, sys, json, math, traceback, tempfile, gc, shutil, subprocess
 import numpy as np
 from flask import Flask, render_template, request, jsonify, send_file
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
+from werkzeug.exceptions import RequestEntityTooLarge
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_FOLDER = os.path.join(tempfile.gettempdir(), 'sonariq_uploads')
@@ -16,7 +17,51 @@ ALLOWED_EXTENSIONS = {'wav', 'mp3', 'flac', 'ogg', 'aiff'}
 app = Flask(__name__)
 CORS(app)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024 * 1024  # 2 GB for full albums
+app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500 MB
+
+# ─── Startup diagnostics ───
+def check_dependencies():
+    """Check runtime dependencies on startup"""
+    print("=" * 50)
+    print("Sonariq Mastering Analyzer — Startup Check")
+    print("=" * 50)
+    # Check ffmpeg
+    ffmpeg_path = shutil.which('ffmpeg')
+    if ffmpeg_path:
+        print(f"✅ ffmpeg found: {ffmpeg_path}")
+    else:
+        print("❌ ffmpeg NOT FOUND — audio decoding will fail!")
+        print("   Install with: apt-get install ffmpeg")
+    # Check libsndfile
+    try:
+        import soundfile as sf
+        print(f"✅ soundfile (libsndfile) OK")
+    except Exception as e:
+        print(f"❌ soundfile error: {e}")
+    # Check librosa
+    try:
+        import librosa
+        print(f"✅ librosa OK (version {librosa.__version__})")
+    except Exception as e:
+        print(f"❌ librosa error: {e}")
+    print("=" * 50)
+
+check_dependencies()
+
+# ─── Global error handlers (always return JSON) ───
+@app.errorhandler(413)
+@app.errorhandler(RequestEntityTooLarge)
+def handle_too_large(e):
+    return jsonify({'error': 'Plik za duży. Maksymalny rozmiar: 500 MB.'}), 413
+
+@app.errorhandler(500)
+def handle_500(e):
+    traceback.print_exc()
+    return jsonify({'error': f'Wewnętrzny błąd serwera: {str(e)}'}), 500
+
+@app.errorhandler(404)
+def handle_404(e):
+    return jsonify({'error': 'Endpoint nie znaleziony'}), 404
 
 # ─── Sanitize ───
 def sanitize_for_json(obj):
@@ -414,24 +459,47 @@ def index():
 def run_full_analysis(filepath, original_filename):
     import librosa
     import numpy as np
-    y_mono,sr=librosa.load(filepath,sr=44100,mono=True)
-    y_stereo,_=librosa.load(filepath,sr=44100,mono=False)
+    print(f"[ANALYSIS] Starting: {original_filename}")
+    print(f"[ANALYSIS] File size: {os.path.getsize(filepath) / 1024 / 1024:.1f} MB")
+    
+    try:
+        y_stereo,sr=librosa.load(filepath,sr=44100,mono=False)
+    except Exception as e:
+        raise RuntimeError(f"Nie udało się zdekodować pliku audio. Sprawdź, czy ffmpeg jest zainstalowany. Błąd: {e}")
+    
+    # Derive mono from stereo (avoid loading file twice — saves ~50% RAM)
+    y_mono = np.mean(y_stereo, axis=0) if y_stereo.ndim > 1 else y_stereo
     duration=round(float(len(y_mono)/sr),2)
+    print(f"[ANALYSIS] Loaded: {duration}s, sr={sr}, shape={y_stereo.shape}")
+    
     r={'filename':original_filename,'duration':duration,'sampleRate':sr,
        'channels':1 if y_stereo.ndim==1 else y_stereo.shape[0]}
     r['lufs']=compute_lufs(y_stereo,sr)
+    print("[ANALYSIS] LUFS done")
     r['truePeak']=compute_true_peak(y_stereo,sr)
+    print("[ANALYSIS] True Peak done")
     r['spectrum']=compute_spectrum(y_stereo,sr)
+    print("[ANALYSIS] Spectrum done")
     r['stereo']=compute_stereo(y_stereo,sr)
+    print("[ANALYSIS] Stereo done")
     r['dynamics']=compute_dynamics(y_stereo,sr)
+    print("[ANALYSIS] Dynamics done")
     r['key']=compute_key(y_stereo,sr)
+    print("[ANALYSIS] Key done")
     r['tempoChords']=compute_tempo_and_chords(y_stereo,sr)
+    print("[ANALYSIS] Tempo done")
     r['crest']=compute_crest_factor(y_stereo,sr)
     r['lossy']=detect_lossy_origin(y_stereo,sr)
     r['waveform']=compute_waveform(y_stereo,sr)
     r['fade']=compute_fade_detection(y_stereo,sr)
     r['qc']=compute_auto_qc(y_stereo,sr,r)
     r['aiTips']=generate_ai_suggestions(r)
+    
+    # Cleanup memory
+    del y_mono, y_stereo
+    gc.collect()
+    print(f"[ANALYSIS] Complete: {original_filename}")
+    
     return sanitize_for_json(r)
 
 from flask import request, jsonify, Response
@@ -442,16 +510,31 @@ import os, json
 def analyze_endpoint():
     if 'file' not in request.files: return jsonify({'error':'Brak pliku'}), 400
     f = request.files['file']
+    if not f.filename:
+        return jsonify({'error': 'Plik nie ma nazwy'}), 400
     filename = secure_filename(f.filename)
+    if not filename:
+        filename = 'uploaded_audio.wav'
     path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    f.save(path)
+    try:
+        f.save(path)
+        print(f"[UPLOAD] Saved: {path} ({os.path.getsize(path)} bytes)")
+    except Exception as e:
+        return jsonify({'error': f'Błąd zapisu pliku: {str(e)}'}), 500
     try:
         r = run_full_analysis(path, f.filename)
         return jsonify(r)
     except Exception as e:
-        import traceback
         traceback.print_exc()
-        return jsonify({'error':str(e)}), 500
+        return jsonify({'error': str(e)}), 500
+    finally:
+        # Cleanup uploaded file
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+        except:
+            pass
+        gc.collect()
 
 @app.route('/api/compare', methods=['POST'])
 def compare_endpoint():
