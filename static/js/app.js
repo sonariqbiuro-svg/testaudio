@@ -101,11 +101,29 @@ dzBatch.addEventListener('dragleave', () => dzBatch.classList.remove('dragover')
 dzBatch.addEventListener('drop', e => { e.preventDefault(); dzBatch.classList.remove('dragover'); if (e.dataTransfer.files.length) startBatch(e.dataTransfer.files); });
 fiBatch.addEventListener('change', e => { if (e.target.files.length) startBatch(e.target.files); });
 
+// ═══════ SERVER WAKE-UP ═══════
+async function wakeUpServer() {
+    try {
+        const res = await fetch('/api/health', { method: 'GET', cache: 'no-store' });
+        return res.ok;
+    } catch (e) { return false; }
+}
+
 // ═══════ ANALYSIS ═══════
-async function startAnalysis(file) {
+async function startAnalysis(file, isRetry = false) {
     showProgress(file.name);
     const fd = new FormData(); fd.append('file', file);
     try {
+        // Wake up the server first (Render free tier sleeps after 15 min)
+        if (!isRetry) {
+            progressStatus.textContent = 'Budzenie serwera...';
+            const awake = await wakeUpServer();
+            if (!awake) {
+                progressStatus.textContent = 'Serwer się uruchamia, czekam...';
+                await new Promise(r => setTimeout(r, 5000));
+                await wakeUpServer();
+            }
+        }
         const iv = fakeProgress();
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 600000);
@@ -114,7 +132,19 @@ async function startAnalysis(file) {
         clearInterval(iv);
         const txt = await res.text();
         let data;
-        try { data = JSON.parse(txt); } catch (e) { throw new Error('Serwer zwrócił nieprawidłowy JSON. Sprawdź konsolę serwera.'); }
+        try {
+            data = JSON.parse(txt);
+        } catch (e) {
+            // Server returned HTML instead of JSON — likely crashed or still waking up
+            if (!isRetry) {
+                console.warn('Server returned non-JSON, retrying...', txt.substring(0, 200));
+                return startAnalysis(file, true);
+            }
+            if (txt.includes('<!DOCTYPE') || txt.includes('<html')) {
+                throw new Error('Serwer jest przeciążony lub właśnie się uruchamia. Odczekaj 30 sekund i spróbuj ponownie.');
+            }
+            throw new Error('Serwer zwrócił nieprawidłową odpowiedź. Możliwe przyczyny: brak pamięci na serwerze lub plik za duży. Spróbuj mniejszy plik.');
+        }
         if (!res.ok) throw new Error(data.error || 'Błąd serwera');
         analysisData = data;
         finishProgress(() => { resultsSection.classList.remove('hidden'); renderResults(data); btnExportPdf.disabled = false; btnExportJson.disabled = false; });

@@ -452,6 +452,10 @@ def generate_ai_suggestions(results):
 #  Routes
 
 
+@app.route('/api/health')
+def health_check():
+    return jsonify({'status': 'ok', 'message': 'Sonariq Analyzer is running'}), 200
+
 @app.route('/')
 def index():
     return render_template('index.html')
